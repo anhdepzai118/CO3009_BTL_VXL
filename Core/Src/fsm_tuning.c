@@ -11,96 +11,79 @@ void fsm_tuning_enter(void)
     temp_amber = time_amber;
     temp_green = time_green;
 
-    status = TUNE_RED;
+    /* Vào thẳng chế độ chỉnh Xanh trước, Đỏ tự động = Xanh + Vàng */
+    status = TUNE_GREEN;
     clearTimer(0);
     clearTimer(1);
     setTimer(2, 250); // Chớp tắt 2 Hz (250ms sáng / 250ms tắt)
-    traffic_set(1, LIGHT_RED);
-    traffic_set(2, LIGHT_RED);
+    traffic_set(1, LIGHT_GREEN);
+    traffic_set(2, LIGHT_GREEN);
     button_clear_all();
 }
 
-/* Kiểm tra ràng buộc hợp lệ (Đỏ == Xanh + Vàng) và chuyển về chế độ Tự động */
-static void validate_and_apply_tuning(void)
+/* Chuyển từ Chỉnh Xanh sang Chỉnh Vàng */
+static void switch_to_tune_amber(void)
 {
-    if (temp_red == (temp_green + temp_amber) &&
-        temp_red >= 2 && temp_green >= 1 && temp_amber >= 1) {
-        /* Hợp lệ: Lưu cấu hình mới và khởi động lại chu kỳ Tự động */
-        time_red   = temp_red;
-        time_amber = temp_amber;
-        time_green = temp_green;
-
-        lcd_notice_code = 1; // Hiển thị "LUU OK!"
-        SCH_Add_Task(global_clear_lcd_notice_oneshot, 150, 0); // One-shot task xóa thông báo sau 1.5s
-        global_enter_auto_mode();
-    } else if (lcd_notice_code == 2) {
-        /* Nếu đang hiện cảnh báo lỗi mà người dùng nhấn BTN_MODE lần 2 -> tự động cân bằng D = X + V và lưu */
-        temp_red = temp_green + temp_amber;
-        if (temp_red > 99) {
-            temp_red = 99;
-            temp_green = temp_red - temp_amber;
-        }
-        time_red   = temp_red;
-        time_amber = temp_amber;
-        time_green = temp_green;
-
-        lcd_notice_code = 1;
-        SCH_Add_Task(global_clear_lcd_notice_oneshot, 150, 0);
-        global_enter_auto_mode();
-    } else {
-        /* Không hợp lệ: Báo lỗi trên LCD bằng One-shot Task trong 2 giây và giữ ở chế độ Tuning */
-        lcd_notice_code = 2; // "LOI: D != X + V!"
-        SCH_Add_Task(global_clear_lcd_notice_oneshot, 200, 0);
-    }
+    status = TUNE_AMBER;
+    setTimer(2, 250);
+    traffic_set(1, LIGHT_AMBER);
+    traffic_set(2, LIGHT_AMBER);
+    button_clear_all();
 }
 
-/* Tự động cân bằng Đỏ = Xanh + Vàng và lưu ngay khi nhấn nút USER (PC13) */
-static void auto_balance_and_save(void)
+/* Chuyển từ Chỉnh Vàng vòng lại Chỉnh Xanh */
+static void switch_to_tune_green(void)
 {
-    temp_red = temp_green + temp_amber;
-    if (temp_red > 99) {
-        temp_red = 99;
-        temp_green = temp_red - temp_amber;
-    }
+    status = TUNE_GREEN;
+    setTimer(2, 250);
+    traffic_set(1, LIGHT_GREEN);
+    traffic_set(2, LIGHT_GREEN);
+    button_clear_all();
+}
+
+/* Lưu trực tiếp (Đỏ luôn bằng Xanh + Vàng) và quay về chế độ Tự động */
+static void apply_tuning_and_save(void)
+{
+    temp_red   = temp_green + temp_amber;
     time_red   = temp_red;
     time_amber = temp_amber;
     time_green = temp_green;
 
-    lcd_notice_code = 1;
-    SCH_Add_Task(global_clear_lcd_notice_oneshot, 150, 0);
+    lcd_notice_code = 1; // Hiển thị "LUU OK!"
+    SCH_Add_Task(global_clear_lcd_notice_oneshot, 150, 0); // Xóa thông báo sau 1.5s
     global_enter_auto_mode();
 }
 
 void fsm_tuning_run(void)
 {
     switch (status) {
-    case TUNE_RED:
+    /* Bước 1 của Tuning: Chỉnh thời gian đèn XANH (Đỏ tự động = Xanh + Vàng) */
+    case TUNE_GREEN:
         if (timer_flag[2] == 1) {
             setTimer(2, 250);
-            traffic_toggle_both(LIGHT_RED);
+            traffic_toggle_both(LIGHT_GREEN);
         }
 
         if (isButtonPressed(BTN_INC)) {
-            if (temp_red < 99) temp_red++;
-            else temp_red = 2;
+            if (temp_green < 89) temp_green++;
+            else temp_green = 1;
+            temp_red = temp_green + temp_amber;
         }
         if (isButtonPressed(BTN_DEC)) {
-            if (temp_red > 2) temp_red--;
-            else temp_red = 99;
+            if (temp_green > 1) temp_green--;
+            else temp_green = 89;
+            temp_red = temp_green + temp_amber;
         }
-        if (isButtonPressed(BTN_SELECT)) {
-            status = TUNE_AMBER;
-            setTimer(2, 250);
-            traffic_set(1, LIGHT_AMBER);
-            traffic_set(2, LIGHT_AMBER);
-        }
-        if (isButtonPressed(BTN_MODE)) {
-            validate_and_apply_tuning();
+
+        /* Nhấn BTN_MODE (Nút 1) hoặc BTN_SELECT (Nút 2) đều chuyển tiếp sang Chỉnh VÀNG */
+        if (isButtonPressed(BTN_MODE) || isButtonPressed(BTN_SELECT)) {
+            switch_to_tune_amber();
         } else if (isButtonPressed(BTN_USER_B1)) {
-            auto_balance_and_save();
+            apply_tuning_and_save();
         }
         break;
 
+    /* Bước 2 của Tuning: Chỉnh thời gian đèn VÀNG (Đỏ tự động = Xanh + Vàng) */
     case TUNE_AMBER:
         if (timer_flag[2] == 1) {
             setTimer(2, 250);
@@ -110,48 +93,21 @@ void fsm_tuning_run(void)
         if (isButtonPressed(BTN_INC)) {
             if (temp_amber < 10) temp_amber++;
             else temp_amber = 1;
+            temp_red = temp_green + temp_amber;
         }
         if (isButtonPressed(BTN_DEC)) {
             if (temp_amber > 1) temp_amber--;
             else temp_amber = 10;
-        }
-        if (isButtonPressed(BTN_SELECT)) {
-            status = TUNE_GREEN;
-            setTimer(2, 250);
-            traffic_set(1, LIGHT_GREEN);
-            traffic_set(2, LIGHT_GREEN);
-        }
-        if (isButtonPressed(BTN_MODE)) {
-            validate_and_apply_tuning();
-        } else if (isButtonPressed(BTN_USER_B1)) {
-            auto_balance_and_save();
-        }
-        break;
-
-    case TUNE_GREEN:
-        if (timer_flag[2] == 1) {
-            setTimer(2, 250);
-            traffic_toggle_both(LIGHT_GREEN);
+            temp_red = temp_green + temp_amber;
         }
 
-        if (isButtonPressed(BTN_INC)) {
-            if (temp_green < 98) temp_green++;
-            else temp_green = 1;
-        }
-        if (isButtonPressed(BTN_DEC)) {
-            if (temp_green > 1) temp_green--;
-            else temp_green = 98;
-        }
+        /* Nhấn BTN_SELECT (Nút 2) để quay lại Chỉnh XANH nếu muốn sửa tiếp */
         if (isButtonPressed(BTN_SELECT)) {
-            status = TUNE_RED;
-            setTimer(2, 250);
-            traffic_set(1, LIGHT_RED);
-            traffic_set(2, LIGHT_RED);
+            switch_to_tune_green();
         }
-        if (isButtonPressed(BTN_MODE)) {
-            validate_and_apply_tuning();
-        } else if (isButtonPressed(BTN_USER_B1)) {
-            auto_balance_and_save();
+        /* Nhấn BTN_MODE (Nút 1) hoặc nút USER sau khi chỉnh Vàng xong -> Lưu và về AUTO */
+        else if (isButtonPressed(BTN_MODE) || isButtonPressed(BTN_USER_B1)) {
+            apply_tuning_and_save();
         }
         break;
 

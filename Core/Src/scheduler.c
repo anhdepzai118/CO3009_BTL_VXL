@@ -27,7 +27,7 @@ static uint32_t SCH_Insert_Task(void (*pFunc)(void), uint32_t DELAY, uint32_t PE
     SCH_tasks_G[idx].pTask  = pFunc;
     SCH_tasks_G[idx].Delay  = DELAY;
     SCH_tasks_G[idx].Period = PERIOD;
-    SCH_tasks_G[idx].RunMe  = (DELAY == 0) ? 1 : 0;
+    SCH_tasks_G[idx].RunMe  = (idx == 0 && DELAY == 0) ? 1 : 0;
     SCH_tasks_G[idx].TaskID = taskID;
 
     SCH_count++;

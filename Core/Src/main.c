@@ -160,8 +160,8 @@ int main(void)
   /* 3. Đăng ký các Task vào Scheduler (1 tick = 10 ms) */
   SCH_Add_Task(button_reading,     0,   1);   // Đọc nút nhấn & chống dội mỗi 10 ms
   SCH_Add_Task(timer_run,          0,   1);   // Cập nhật software timer mỗi 10 ms
-  SCH_Add_Task(task_fsm_run,       1,   1);   // Chạy máy trạng thái mỗi 10 ms
-  SCH_Add_Task(lcd_update_task,    5,   20);  // Cập nhật màn hình LCD mỗi 200 ms
+  SCH_Add_Task(task_fsm_run,       0,   1);   // Chạy máy trạng thái đồng bộ mỗi 10 ms
+  SCH_Add_Task(lcd_update_task,    2,   10);  // Cập nhật màn hình LCD mỗi 100 ms
   SCH_Add_Task(dht20_read_task,    10,  100); // Đọc cảm biến DHT20 mỗi 1000 ms (Non-blocking)
   SCH_Add_Task(task_heartbeat_led, 0,   50);  // Nháy đèn báo nhịp PA5 mỗi 500 ms
 
